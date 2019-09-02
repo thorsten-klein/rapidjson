@@ -33,7 +33,7 @@ RAPIDJSON_DIAG_OFF(array-bounds) // some gcc versions generate wrong warnings ht
 #endif
 
 inline void GrisuRound(char* buffer, int len, uint64_t delta, uint64_t rest, uint64_t ten_kappa, uint64_t wp_w) {
-    while (rest < wp_w && delta - rest >= ten_kappa &&
+    while (buffer && len>0 && rest < wp_w && delta - rest >= ten_kappa &&
            (rest + ten_kappa < wp_w ||  /// closer
             wp_w - rest > rest + ten_kappa - wp_w)) {
         buffer[len - 1]--;
@@ -185,7 +185,7 @@ inline char* Prettify(char* buffer, int length, int k, int maxDecimalPlaces) {
             // When maxDecimalPlaces = 2, 0.123 -> 0.12, 0.102 -> 0.1
             // Remove extra trailing zeros (at least one) after truncation.
             for (int i = maxDecimalPlaces + 1; i > 2; i--)
-                if (buffer[i] != '0')
+                if ( (buffer[i]) != '0')
                     return &buffer[i + 1];
             return &buffer[3]; // Reserve one zero
         }

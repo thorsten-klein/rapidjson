@@ -744,14 +744,14 @@ public:
 
         if (allOf_.schemas)
             for (SizeType i = allOf_.begin; i < allOf_.begin + allOf_.count; i++)
-                if (!context.validators[i]->IsValid()) {
+                if (context.validators && !context.validators[i]->IsValid()) {
                     context.error_handler.NotAllOf(&context.validators[allOf_.begin], allOf_.count);
                     RAPIDJSON_INVALID_KEYWORD_RETURN(GetAllOfString());
                 }
         
         if (anyOf_.schemas) {
             for (SizeType i = anyOf_.begin; i < anyOf_.begin + anyOf_.count; i++)
-                if (context.validators[i]->IsValid())
+                if (context.validators && context.validators[i]->IsValid())
                     goto foundAny;
             context.error_handler.NoneOf(&context.validators[anyOf_.begin], anyOf_.count);
             RAPIDJSON_INVALID_KEYWORD_RETURN(GetAnyOfString());
@@ -761,7 +761,7 @@ public:
         if (oneOf_.schemas) {
             bool oneValid = false;
             for (SizeType i = oneOf_.begin; i < oneOf_.begin + oneOf_.count; i++)
-                if (context.validators[i]->IsValid()) {
+                if (context.validators && context.validators[i]->IsValid()) {
                     if (oneValid) {
                         context.error_handler.NotOneOf(&context.validators[oneOf_.begin], oneOf_.count);
                         RAPIDJSON_INVALID_KEYWORD_RETURN(GetOneOfString());
@@ -774,7 +774,7 @@ public:
             }
         }
 
-        if (not_ && context.validators[notValidatorIndex_]->IsValid()) {
+        if (not_ && context.validators && context.validators[notValidatorIndex_]->IsValid()) {
             context.error_handler.Disallowed();
             RAPIDJSON_INVALID_KEYWORD_RETURN(GetNotString());
         }
@@ -1540,7 +1540,7 @@ public:
         uri_.SetString(uri ? uri : noUri, uriLength, *allocator_);
 
         typeless_ = static_cast<SchemaType*>(allocator_->Malloc(sizeof(SchemaType)));
-        new (typeless_) SchemaType(this, PointerType(), ValueType(kObjectType).Move(), ValueType(kObjectType).Move(), allocator_);
+        typeless_ = new (typeless_) SchemaType(this, PointerType(), ValueType(kObjectType).Move(), ValueType(kObjectType).Move(), allocator_);
 
         // Generate root schema, it will call CreateSchema() to create sub-schemas,
         // And call AddRefSchema() if there are $ref.

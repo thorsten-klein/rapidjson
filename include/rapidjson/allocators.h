@@ -216,7 +216,7 @@ public:
             return originalPtr;
 
         // Simply expand it if it is the last allocation and there is sufficient space
-        if (originalPtr == reinterpret_cast<char *>(chunkHead_) + RAPIDJSON_ALIGN(sizeof(ChunkHeader)) + chunkHead_->size - originalSize) {
+        if (chunkHead_ && originalPtr == reinterpret_cast<char *>(chunkHead_) + RAPIDJSON_ALIGN(sizeof(ChunkHeader)) + chunkHead_->size - originalSize) {
             size_t increment = static_cast<size_t>(newSize - originalSize);
             if (chunkHead_->size + increment <= chunkHead_->capacity) {
                 chunkHead_->size += increment;
