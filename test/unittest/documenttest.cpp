@@ -386,6 +386,92 @@ TEST(Document, UserBuffer) {
     EXPECT_LE(parseAllocator.Size(), parseAllocator.Capacity());
 }
 
+// Base allocator that always fails, so MemoryPoolAllocator is limited to its user buffer.
+class NullAllocator {
+public:
+    static const bool kNeedFree = false;
+    void* Malloc(size_t) { return 0; }
+    void* Realloc(void*, size_t, size_t) { return 0; }
+    static void Free(void*) {}
+};
+
+TEST(Document, UserBufferExhaustedWhileParsing) {
+    typedef MemoryPoolAllocator<NullAllocator> AllocatorType;
+    typedef GenericDocument<UTF8<>, AllocatorType, AllocatorType> DocumentType;
+    char valueBuffer[16384];
+    char parseBuffer[1024];
+
+    // Too many values for the parse stack.
+    {
+        std::string json("[");
+        for (int i = 0; i < 500; i++)
+            json += (i ? ",{\"a\":1}" : "{\"a\":1}");
+        json += "]";
+        AllocatorType valueAllocator(valueBuffer, sizeof(valueBuffer));
+        AllocatorType parseAllocator(parseBuffer, sizeof(parseBuffer));
+        DocumentType doc(&valueAllocator, sizeof(parseBuffer) / 2, &parseAllocator);
+        doc.Parse(json.c_str());
+        EXPECT_TRUE(doc.HasParseError());
+        EXPECT_EQ(kParseErrorTermination, doc.GetParseError());
+    }
+
+    // String too long for the reader's character buffer.
+    {
+        std::string json("[\"");
+        json.append(2000, 'x');
+        json += "\"]";
+        AllocatorType valueAllocator(valueBuffer, sizeof(valueBuffer));
+        AllocatorType parseAllocator(parseBuffer, sizeof(parseBuffer));
+        DocumentType doc(&valueAllocator, sizeof(parseBuffer) / 2, &parseAllocator);
+        doc.Parse(json.c_str());
+        EXPECT_TRUE(doc.HasParseError());
+        EXPECT_EQ(kParseErrorTermination, doc.GetParseError());
+    }
+
+    // Number too long for the reader's character buffer (full precision).
+    {
+        std::string json("[1.");
+        json.append(2000, '1');
+        json += "]";
+        AllocatorType valueAllocator(valueBuffer, sizeof(valueBuffer));
+        AllocatorType parseAllocator(parseBuffer, sizeof(parseBuffer));
+        DocumentType doc(&valueAllocator, sizeof(parseBuffer) / 2, &parseAllocator);
+        doc.Parse<kParseFullPrecisionFlag>(json.c_str());
+        EXPECT_TRUE(doc.HasParseError());
+        EXPECT_EQ(kParseErrorTermination, doc.GetParseError());
+    }
+}
+
+TEST(Document, UserBufferExhaustedWhileBuilding) {
+    typedef MemoryPoolAllocator<NullAllocator> AllocatorType;
+    typedef GenericValue<UTF8<>, AllocatorType> ValueType;
+    char valueBuffer[1024];
+    AllocatorType allocator(valueBuffer, sizeof(valueBuffer));
+
+    ValueType a(kArrayType);
+    for (int i = 0; i < 1000; i++)
+        a.PushBack(i, allocator);
+    EXPECT_GT(a.Size(), 0u);
+    EXPECT_LT(a.Size(), 1000u);
+    EXPECT_LE(a.Size(), a.Capacity());
+    for (SizeType i = 0; i < a.Size(); i++)
+        EXPECT_EQ(static_cast<int>(i), a[i].GetInt());
+
+    ValueType o(kObjectType);
+    for (int i = 0; i < 1000; i++)
+        o.AddMember("k", i, allocator);
+    EXPECT_LE(o.MemberCount(), o.MemberCapacity());
+
+    std::string s(2000, 'x');
+    ValueType v(s.c_str(), static_cast<SizeType>(s.size()), allocator);
+    EXPECT_TRUE(v.IsString());
+    EXPECT_EQ(0u, v.GetStringLength());
+
+    ValueType copy(a, allocator);
+    EXPECT_TRUE(copy.IsArray());
+    EXPECT_EQ(0u, copy.Size());
+}
+
 // Issue 226: Value of string type should not point to NULL
 TEST(Document, AssertAcceptInvalidNameType) {
     Document doc;
